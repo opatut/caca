@@ -4,7 +4,8 @@
 import argparse
 import shutil
 import os
-import shutil
+import tempfile
+import subprocess
 
 DESCRIPTION = """caca - Copy And Convert Audio.
 
@@ -18,38 +19,73 @@ def detect_utils():
         if not shutil.which(tool):
             raise FileNotFoundError("'{}' was not found on your system but is required".format(tool))
 
+import flac, mp3
+format_modules = [flac, mp3]
 
-def convert_flac(src, target):
-    pass
+def get_extension(filename):
+    ext = os.path.splitext(filename)[1].lower()
+    if ext: ext = ext[1:] # cut away the '.'
+    return ext
+
+def first(fn, seq):
+    for i in seq:
+        if fn(i):
+            return i
+    return None
+
+def shell_command(cmd, src, target):
+    cmd = cmd.format(src=src.replace('"', '\\"'), target=target.replace('"', '\\"'))
+    if args.verbose:
+        print("--> " + cmd)
+    return subprocess.call(cmd, shell=True) == 0
+
+def convert(src, target):
+    src_ext = get_extension(src)
+    src_format = first(lambda module: src_ext in module.extensions, format_modules)
+
+    target_ext = get_extension(target)
+    target_format = first(lambda module: target_ext in module.extensions, format_modules)
+
+    if not src_format or not target_format:
+        return False
+
+    if src_ext == target_ext:
+        return copy_raw(src, target)
+
+    # check whether we can convert directly between those formats
+    direct = src_format.direct_convert(target_ext, src, target)
+    if direct:
+        return shell_command(direct, src, target)
+
+    def composed():
+        with tempfile.NamedTemporaryFile() as f:
+            return shell_command(src_format.decode, f.name, target) and \
+                shell_command(target_format.encode, f.name, target)
+
+    return composed
+
 
 def copy_raw(src, target):
     shutil.copyfile(src, target)
+    return True
 
-def convert_ogg(src, target):
-    pass
-
-extensions = {
-    'flac': convert_flac,
-    'mp3': copy_raw,
-    'ogg': convert_ogg
-}
 
 def handle_file(src, target):
-    # get the file type by extension
-    ext = os.path.splitext(src)[1].lower()
-    if ext: ext = ext[1:] # cut away the '.'
+    ext = get_extension(src)
 
     # create target directory
     target_dir = target if os.path.isdir(target) else os.path.dirname(target)
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
+    if os.path.isdir(target):
+        f, e  = os.path.splitext(os.path.basename(src))
+        target = os.path.join(target_dir, f + "." + args.format)
 
-    if ext in extensions:
+
+    if convert(src, target):
         if args.verbose:
-            print("[convert] '{}' -> '{}'".format(src, target))
-
-        extensions[ext](src, target)
+            print("[converted] '{}' -> '{}'".format(src, target))
 
     else:
         if args.skip_unknown:
@@ -78,6 +114,7 @@ def main():
     parser.add_argument("-R", "-r", "--recursive", help="copy directories recursively", action="store_true")
     parser.add_argument("-a", "--archive", help="same as --recursive but preserves attributes", action="store_true")
     parser.add_argument("-s", "--skip-unknown", help="do not copy unknown file types", action="store_true")
+    parser.add_argument("-f", "--format", help="target file extension (mp3/flac/ogg/wav)", default="mp3")
 
     # overwrite args array
     global args
