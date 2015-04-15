@@ -78,10 +78,14 @@ def handle_file(src, target):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
 
-    if os.path.isdir(target):
-        f, e  = os.path.splitext(os.path.basename(src))
-        target = os.path.join(target_dir, f + "." + args.format)
+    # build target filename
+    f, e  = os.path.splitext(os.path.basename(src))
+    target = os.path.join(target_dir, f + "." + args.format)
 
+    if os.path.exists(target) and args.skip_existing:
+        if args.verbose:
+            print("[existing] '{}' -> '{}'".format(src, target))
+        return
 
     if convert(src, target):
         if args.verbose:
@@ -114,6 +118,7 @@ def main():
     parser.add_argument("-R", "-r", "--recursive", help="copy directories recursively", action="store_true")
     parser.add_argument("-a", "--archive", help="same as --recursive but preserves attributes", action="store_true")
     parser.add_argument("-s", "--skip-unknown", help="do not copy unknown file types", action="store_true")
+    parser.add_argument("-S", "--skip-existing", help="do not overwrite existing files", action="store_true")
     parser.add_argument("-f", "--format", help="target file extension (mp3/flac/ogg/wav)", default="mp3")
 
     # overwrite args array
