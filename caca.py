@@ -136,7 +136,12 @@ def main():
         raise RuntimeException("cannot overwrite non-directory '{}' with directory '{}'".format(args.target, args.sources[0]))
 
     for src in args.sources:
-        handle_path(src, args.target)
+        target = args.target
+        # Checks if the source should be moved to a new folder based on file/dirname or directly into target folder
+        if os.path.isdir(args.target) and len(args.sources) > 1 or args.target[-1] == "/":
+            target = os.path.join(target, os.path.basename(src))
+
+        handle_path(src, target)
 
 if __name__ == '__main__':
     main()
